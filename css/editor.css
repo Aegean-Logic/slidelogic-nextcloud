@@ -1,0 +1,60 @@
+#content.app-deckcraft {
+	overflow: hidden;
+}
+
+#deckcraft-app {
+	position: relative;
+	width: 100%;
+	height: 100%;
+}
+
+#deckcraft-app iframe {
+	display: block;
+	width: 100%;
+	height: 100%;
+	border: 0;
+}
+
+#deckcraft-status {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 16px;
+	text-align: center;
+	color: var(--color-text-maxcontrast);
+	pointer-events: none;
+}
+
+#deckcraft-status.error {
+	color: var(--color-error-text, var(--color-error));
+}
+
+#deckcraft-status[hidden] {
+	display: none;
+}
+
+/* Saves of copies (Export, Save As, Print) and their problems: a note above the editor's foot. */
+#deckcraft-notice {
+	position: absolute;
+	left: 50%;
+	bottom: 40px;
+	transform: translateX(-50%);
+	max-width: min(560px, calc(100% - 32px));
+	margin: 0;
+	padding: 8px 14px;
+	border-radius: var(--border-radius-large, 10px);
+	background: var(--color-main-background);
+	box-shadow: 0 2px 12px var(--color-box-shadow, rgba(0, 0, 0, 0.25));
+	color: var(--color-main-text);
+	pointer-events: none;
+}
+
+#deckcraft-notice.error {
+	color: var(--color-error-text, var(--color-error));
+}
+
+#deckcraft-notice[hidden] {
+	display: none;
+}

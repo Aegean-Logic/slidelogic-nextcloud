@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+	<id>deckcraft</id>
+	<name>SlideLogic</name>
+	<summary>Open and edit presentations in SlideLogic</summary>
+	<description><![CDATA[Open PowerPoint presentations (.pptx, .potx, .ppsx) from Files in SlideLogic, an open-source presentation app by Aegean Logic that runs in the browser. Saving writes the presentation back to Nextcloud; Export and Save As put PDFs, pictures and copies next to it.]]></description>
+	<version>0.1.0</version>
+	<licence>agpl</licence>
+	<author homepage="https://www.aegeanlogic.co.uk">Aegean Logic</author>
+	<namespace>DeckCraft</namespace>
+	<category>office</category>
+	<category>files</category>
+	<dependencies>
+		<nextcloud min-version="32" max-version="34"/>
+	</dependencies>
+</info>
