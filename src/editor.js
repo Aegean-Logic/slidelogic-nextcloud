@@ -1,16 +1,24 @@
 // The editor page: SlideLogic runs in an iframe on this origin (`?host=parent&ack=1`). This page
 // reads the presentation over WebDAV with the user's session, hands it to SlideLogic, and writes
 // back what SlideLogic saves. Protocol: deckcraft/packaging/web/README.md ("Opening and saving
-// through the page").
+// through the page", "Co-editing").
+//
+// A presentation in a format SlideLogic saves in place is co-edited: everyone with it open edits
+// the same presentation (collab.js), and Save writes it as everyone has it.
 
 import { getCurrentUser, getRequestToken } from '@nextcloud/auth'
-import { generateRemoteUrl } from '@nextcloud/router'
+import { generateRemoteUrl, generateUrl } from '@nextcloud/router'
+
+import { Collab, colorFor } from './collab.js'
 
 const root = document.getElementById('deckcraft-app')
 const status = document.getElementById('deckcraft-status')
 const notice = document.getElementById('deckcraft-notice')
 const path = root?.dataset.path ?? ''
+const fileId = Number(root?.dataset.fileId ?? 0)
 const user = getCurrentUser()
+/** How the others see this person. */
+const personName = user?.displayName || user?.uid || 'Someone'
 
 /** The folder of `path` and its file name. */
 function split(p) {
@@ -19,6 +27,23 @@ function split(p) {
 }
 
 const [folder, fileName] = split(path)
+
+/** Formats SlideLogic saves a presentation in as it is (anything else is saved as .pptx). */
+const SAVES_IN_PLACE = ['pptx', 'potx', 'ppsx', 'deckcraft']
+
+/** The extension of a file name, lower-case ('' if none). */
+function extensionOf(name) {
+	const i = name.lastIndexOf('.')
+	return i < 0 ? '' : name.slice(i + 1).toLowerCase()
+}
+
+/** Whether the opened file is co-edited: everyone's edits are saved back into it. */
+const coEdits = SAVES_IN_PLACE.includes(extensionOf(fileName))
+
+/** Whether SlideLogic is saving the opened file itself (not a copy under another name). */
+function isOpenedFile(name) {
+	return String(name ?? '').split(/[\\/]/).pop().toLowerCase() === fileName.toLowerCase()
+}
 
 /** WebDAV URL of a path in the user's files. */
 function davUrl(p) {
@@ -50,8 +75,15 @@ let dirty = false
 /** The presentation's current name (Nextcloud may have stored it under another). */
 let shownName = fileName
 
+/** The co-editing session, once joined. */
+let collab = null
+/** How many others are in it. */
+let others = 0
+
 function showTitle() {
-	document.title = `${dirty ? '• ' : ''}${shownName} - SlideLogic`
+	const unsaved = collab ? collab.unsaved : dirty
+	const company = others > 0 ? ` (${others + 1} editing)` : ''
+	document.title = `${unsaved ? '• ' : ''}${shownName}${company} - SlideLogic`
 }
 
 function headers(extra = {}) {
@@ -59,7 +91,7 @@ function headers(extra = {}) {
 }
 
 async function load(frame) {
-	const response = await fetch(davUrl(path), { headers: headers(), credentials: 'same-origin' })
+	const response = await fetch(davUrl(path), { headers: headers(), credentials: 'same-origin', cache: 'no-store' })
 	if (!response.ok) {
 		throw new Error(`${response.status} ${response.statusText}`)
 	}
@@ -208,7 +240,11 @@ function start() {
 				console.warn('SlideLogic: this build does not confirm saves; a failed save will not be reported')
 			}
 			try {
-				await load(frame)
+				if (message.collab && fileId > 0 && coEdits) {
+					await share(frame)
+				} else {
+					await load(frame)
+				}
 				status.hidden = true
 			} catch (e) {
 				show(`Couldn't open ${fileName}: ${e.message}`, true)
@@ -226,7 +262,14 @@ function start() {
 			{
 				let reply
 				try {
-					reply = await storePresentation(message)
+					// Shared: Save writes the presentation as everyone has it.
+					if (collab && isOpenedFile(message.name)) {
+						await collab.checkpoint()
+						reply = { type: 'deckcraft:saved', id: message.id }
+						showTitle()
+					} else {
+						reply = await storePresentation(message)
+					}
 				} catch (e) {
 					reply = { type: 'deckcraft:saveFailed', id: message.id, error: `Couldn't reach Nextcloud: ${e.message}` }
 				}
@@ -240,6 +283,20 @@ function start() {
 			dirty = Boolean(message.dirty)
 			showTitle()
 			break
+		case 'deckcraft:collab:op':
+			collab?.queue(message.json)
+			showTitle()
+			break
+		case 'deckcraft:collab:checkpointData':
+			collab?.received(message)
+			break
+		case 'deckcraft:collab:selection':
+			collab?.setSelection(message.json)
+			break
+		case 'deckcraft:collab:error':
+			console.warn('SlideLogic co-editing:', message.error)
+			collab?.rejoin()
+			break
 		case 'deckcraft:failed':
 			show(`SlideLogic couldn't start: ${message.error}`, true)
 			break
@@ -247,13 +304,82 @@ function start() {
 	})
 
 	addEventListener('beforeunload', (event) => {
-		if (dirty) {
+		if (collab ? collab.unsaved : dirty) {
 			event.preventDefault()
 		}
 	})
 
 	frame.src = editorUrl.toString()
 	root.appendChild(frame)
+}
+
+/** Who's editing, above the editor: each person in the colour they're drawn in on the slides. */
+function showPeople(members) {
+	let strip = document.getElementById('deckcraft-people')
+	if (!strip) {
+		strip = document.createElement('div')
+		strip.id = 'deckcraft-people'
+		strip.setAttribute('aria-label', "Who's editing")
+		root.prepend(strip)
+	}
+	const me = collab?.client
+	const sorted = [...members].sort((a, b) => (a.client === me ? -1 : b.client === me ? 1 : a.client - b.client))
+	const key = JSON.stringify(sorted.map((m) => [m.client, m.displayName, m.canEdit]))
+	if (strip.dataset.key === key) {
+		return
+	}
+	strip.dataset.key = key
+	strip.replaceChildren(
+		Object.assign(document.createElement('span'), { className: 'label', textContent: sorted.length > 1 ? 'Editing now:' : 'Only you are editing' }),
+	)
+	if (sorted.length < 2) {
+		return
+	}
+	for (const m of sorted) {
+		const name = m.displayName || m.userId
+		const shown = `${name}${m.client === me ? ' (you)' : ''}${m.canEdit === false ? ' (viewing)' : ''}`
+		const chip = document.createElement('span')
+		chip.className = 'person'
+		chip.style.setProperty('--person', colorFor(m.client))
+		chip.title = shown
+		const initials = Object.assign(document.createElement('span'), { className: 'initials', textContent: initialsOf(name) })
+		chip.append(initials, document.createTextNode(shown))
+		strip.append(chip)
+	}
+}
+
+function initialsOf(name) {
+	const parts = String(name).trim().split(/\s+/).filter(Boolean)
+	return ((parts[0]?.[0] ?? '?') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase()
+}
+
+/** Opens the file in a co-editing session: everyone with it open edits the same presentation. */
+async function share(frame) {
+	collab = new Collab({
+		frame,
+		fileId,
+		fileUrl: davUrl(path),
+		headers,
+		notify: note,
+		endpoint: generateUrl('/apps/deckcraft/collab'),
+		person: personName,
+		onMembers(members) {
+			others = Math.max(0, members.length - 1)
+			showPeople(members)
+			showTitle()
+		},
+		onChange: showTitle,
+	})
+	const { bytes, seq, state, entries } = await collab.join()
+	const etag = collab.checkpointEtag
+	if (etag) {
+		etags.set(path, `"${etag}"`)
+	}
+	// The file names the presentation and its format; a state snapshot, when the session keeps
+	// one, is the shared presentation itself (collab:start).
+	frame.contentWindow.postMessage({ type: 'deckcraft:open', name: fileName, bytes }, location.origin, [bytes])
+	collab.start(seq, entries, state)
+	showTitle()
 }
 
 start()
