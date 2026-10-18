@@ -47,7 +47,11 @@ It is the presentation app beside [GridLogic for Nextcloud](../gridcraft-nextclo
   the newest per session (`deckcraft_sessions.build`, `deckcraft_members.build`) and answers any member
   on an older one with `{rejoin: true}`, so a tab left open across an upgrade reloads with the new
   SlideLogic before it misreads the others' edits or saves its copy over them, and the desktop app
-  (File › Open › Nextcloud) edits together with the browser.
+  (File › Open › Nextcloud) edits together with the browser. The session starts again from the file
+  on the joiner's protocol when nobody is in it and either the file changed or every edit is saved
+  to it (the log, members and kept state snapshot go: a newer engine wrote them), so a newer desktop
+  app that came and went doesn't shut older copies out; with edits not yet saved it waits for a copy
+  as new as theirs.
 - **View-only access:** someone who can read but not write the file follows the others live; an
   edit they try is refused with a message (and the server refuses it too). Only members who can
   edit save the shared presentation, and the server records a checkpoint only from them, and only
