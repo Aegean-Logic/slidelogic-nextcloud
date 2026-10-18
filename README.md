@@ -46,9 +46,24 @@ It is the presentation app beside [GridLogic for Nextcloud](../gridcraft-nextclo
   edit they try is refused with a message (and the server refuses it too). Only members who can
   edit save the shared presentation, and the server records a checkpoint only from them, and only
   for the save the file actually holds (its ETag).
+- **Shared links:** a link to a presentation (`/s/{token}`, link or email share) opens in
+  SlideLogic, as a OneDrive link opens in PowerPoint for the web (`lib/Share/EditorPageProvider.php`).
+  Nextcloud checks the link first, including a password. An edit link lets people edit together
+  with everyone who has the file open, signed-in users included; they show as guests under the
+  name they gave Nextcloud. A view-only link follows live but can't change anything (an edit is
+  refused with a message, and the server refuses it too). The page reads and writes the file
+  through the link's WebDAV address; Save As, Export and Print copies are downloaded instead of
+  stored, since a link reaches only the shared presentation. Co-editing goes through
+  `/apps/deckcraft/s/{token}/collab/*` (`PublicCollabController`), state snapshots included;
+  there, membership is a random key handed out on join, never stored (only its hash).
+- **Links to folders:** a folder link's page (Nextcloud's Files, public) gets the "Open in
+  SlideLogic" action too, as clicking a presentation's default action. It opens
+  `/apps/deckcraft/s/{token}/edit?path=…` (`PublicEditorController`): SlideLogic for that file,
+  read and saved through the link's WebDAV address, co-edited like a file link. Paths out of the
+  shared folder find nothing.
 
-Not yet: sharing from SlideLogic's own Share button, shared links, Open in Desktop App, file
-locking (`files_lock`), Save As into another folder.
+Not yet: sharing from SlideLogic's own Share button, Open in Desktop App, file locking
+(`files_lock`), Save As into another folder.
 
 ## Layout
 
@@ -58,6 +73,7 @@ locking (`files_lock`), Save As into another folder.
 | `lib/` | `Application` (Files hook), `EditorController` (`/edit` page and its CSP), listener |
 | `lib/Controller/CollabController.php`, `lib/Service/CollabService.php`, `SnapshotStore.php` | The co-editing sequencer and its snapshots |
 | `lib/Migration/`, `lib/BackgroundJob/CleanUpSessions.php` | Its tables, and the hourly clean-up of sessions nobody uses |
+| `lib/Share/EditorPageProvider.php`, `lib/Controller/PublicEditorController.php`, `PublicCollabController.php`, `LinkShare.php`, `lib/Listener/LoadPublicFolderScripts.php` | Shared links: the link's page, presentations in a shared folder, co-editing through the link |
 | `templates/editor.php`, `css/editor.css` | The editor page |
 | `src/editor.js` | The host page: WebDAV load/save and the SlideLogic postMessage bridge |
 | `src/collab.js` | Co-editing: joins, sends and polls ops, writes checkpoints, shows who's where |
@@ -92,6 +108,10 @@ The sequencer (`/apps/deckcraft/collab/*`, JSON, with Nextcloud's CSRF token or
 | `GET sync ?sessionId&client&since&sel` | `{entries, members, checkpointSeq, checkpointEtag}`, or `{rejoin: true}` |
 | `POST checkpoint {sessionId, client, seq, etag, state}` | Records the save (only for the ETag the file has) and keeps its snapshot |
 | `POST leave {sessionId, client}` | |
+
+Through a shared link the same routes are `/apps/deckcraft/s/{token}/collab/*`: join also takes
+`displayName` (and, in a shared folder, the presentation's `path` there) and returns `key`, which
+every later call (the snapshot's included) sends back.
 
 ## Build
 
