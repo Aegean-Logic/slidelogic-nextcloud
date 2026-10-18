@@ -4,7 +4,7 @@
 	<name>SlideLogic</name>
 	<summary>Open and edit presentations in SlideLogic</summary>
 	<description><![CDATA[Open PowerPoint presentations (.pptx, .potx, .ppsx) from Files in SlideLogic, an open-source presentation app by Aegean Logic that runs in the browser. Everyone who opens the same presentation edits it together, live. Saving writes the presentation back to Nextcloud; Export and Save As put PDFs, pictures and copies next to it.]]></description>
-	<version>0.4.1</version>
+	<version>0.5.0</version>
 	<licence>agpl</licence>
 	<author homepage="https://www.aegeanlogic.co.uk">Aegean Logic</author>
 	<namespace>DeckCraft</namespace>

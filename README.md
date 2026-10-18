@@ -68,8 +68,21 @@ It is the presentation app beside [GridLogic for Nextcloud](../gridcraft-nextclo
   read and saved through the link's WebDAV address, co-edited like a file link. Paths out of the
   shared folder find nothing.
 
-Not yet: sharing from SlideLogic's own Share button, Open in Desktop App, file locking
-(`files_lock`), Save As into another folder.
+- **Sharing from SlideLogic:** its Share button opens a Share dialog like PowerPoint's with OneDrive:
+  people, groups or email addresses with Can edit or Can view and a message, Copy link with the
+  link's permission in plain sight, link settings (password, expiry), and who has access. SlideLogic
+  draws the dialog; its requests come to the page (`deckcraft:cloud`), and `src/share.js` carries
+  them out with Nextcloud's sharing API (sharee search, shares), answering `deckcraft:cloud:reply`.
+  A guest on a link gets Copy link for that link. The desktop app's Share dialog does the same
+  through its own Nextcloud sign-in.
+- **Open in Desktop App:** in the editor's title bar (`desktop=1` on the editor's URL; not for
+  link guests) and "Open in SlideLogic desktop app" in a presentation's Files menu. Both open the
+  file in SlideLogic on this computer with a `slidelogic://open?server=…&path=…` link
+  (`src/desktop.js`); the desktop app signs in to that Nextcloud first if it needs to, and joins
+  the same co-editing session as the browser. The SlideLogic installers register the scheme
+  (Windows, Linux).
+
+Not yet: file locking (`files_lock`), Save As into another folder.
 
 ## Layout
 
@@ -83,7 +96,9 @@ Not yet: sharing from SlideLogic's own Share button, Open in Desktop App, file l
 | `templates/editor.php`, `css/editor.css` | The editor page |
 | `src/editor.js` | The host page: WebDAV load/save and the SlideLogic postMessage bridge |
 | `src/collab.js` | Co-editing: joins, sends and polls ops, writes checkpoints, shows who's where |
-| `src/files.js` | The Files action |
+| `src/share.js` | The Share dialog's operations through Nextcloud's sharing API |
+| `src/desktop.js` | Open in Desktop App: the `slidelogic://open` link |
+| `src/files.js` | The Files actions |
 | `js/` | Bundles built from `src/` (`npm run build`) |
 | `editor/` | The SlideLogic web build, vendored by `scripts/vendor-editor.sh` (`editor/README.md`) |
 | `img/` | App icons: `slidelogic.svg` (48 px and up), `slidelogic-small.svg` and `app.svg` (32 px and below), from the Aegean Office brand set ("Banded slide") |
@@ -95,6 +110,10 @@ The page and SlideLogic talk over `postMessage` (`deckcraft:ready`, `open`, `sav
 and saving through the page". Saves of the presentation carry an `id` that the page answers;
 copies (`copy: true`) don't. While co-editing, a Save of the opened file writes a checkpoint
 instead.
+
+The Share dialog's requests are `deckcraft:cloud` `{id, op, params}` (to the page; `params` as
+JSON text) and `deckcraft:cloud:reply` `{id, ok, json?, error?}` (to SlideLogic). With `desktop=1`,
+`deckcraft:openDesktop` (to the page) asks to open the presentation in the desktop app.
 
 ### Co-editing
 

@@ -14,6 +14,8 @@ import { getCurrentUser, getGuestNickname, getRequestToken } from '@nextcloud/au
 import { generateRemoteUrl, generateUrl, getRootUrl } from '@nextcloud/router'
 
 import { Collab, colorFor } from './collab.js'
+import { openInDesktop } from './desktop.js'
+import { guestSharing, sharing } from './share.js'
 
 const root = document.getElementById('deckcraft-app')
 const status = document.getElementById('deckcraft-status')
@@ -90,6 +92,8 @@ let dirty = false
 /** The presentation's current name (Nextcloud may have stored it under another). */
 let shownName = fileName
 
+/** Carries out the Share dialog's requests (made on first use). */
+let shareHandler = null
 /** The co-editing session, once joined. */
 let collab = null
 /** How many others are in it. */
@@ -252,7 +256,12 @@ function start() {
 	}
 	const editorUrl = new URL(root.dataset.editorUrl, location.href)
 	// Added to the page's own query (`v`, the app version), which keeps browser caches current.
-	for (const [key, value] of Object.entries({ host: 'parent', ack: '1', author: personName })) {
+	const params = { host: 'parent', ack: '1', author: personName }
+	if (!viaLink) {
+		// The presentation can carry on in SlideLogic on this computer (Open in Desktop App).
+		params.desktop = '1'
+	}
+	for (const [key, value] of Object.entries(params)) {
 		editorUrl.searchParams.set(key, value)
 	}
 
@@ -336,6 +345,20 @@ function start() {
 		case 'deckcraft:collab:error':
 			console.warn('SlideLogic co-editing:', message.error)
 			collab?.rejoin()
+			break
+		case 'deckcraft:cloud': {
+			// The Share dialog asks; Nextcloud answers. A guest on a link can only pass the link on.
+			shareHandler ??= viaLink
+				// (In a shared folder, the editor's own address, which names the presentation in it.)
+				? guestSharing({ name: shownName, link: sharePath ? location.href : `${location.origin}${location.pathname}` })
+				: sharing({ path, name: shownName, davUrl: davUrl(path) })
+			const reply = await shareHandler(message)
+			frame.contentWindow.postMessage(reply, location.origin)
+			break
+		}
+		case 'deckcraft:openDesktop':
+			openInDesktop(path)
+			note('Opening in SlideLogic on this computer… If nothing happens, install SlideLogic for your computer first.')
 			break
 		case 'deckcraft:failed':
 			show(`SlideLogic couldn't start: ${message.error}`, true)

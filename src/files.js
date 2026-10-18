@@ -1,9 +1,12 @@
 // Files app: an "Open in SlideLogic" action on presentations, the default (click to open) for them,
-// in the user's files and on the page of a link to a folder.
+// in the user's files and on the page of a link to a folder; and "Open in SlideLogic desktop app"
+// in the user's own files.
 
 import { DefaultType, Permission, registerFileAction } from '@nextcloud/files'
 import { generateUrl } from '@nextcloud/router'
 import { getSharingToken, isPublicShare } from '@nextcloud/sharing/public'
+
+import { openInDesktop } from './desktop.js'
 
 /** PowerPoint presentations, templates and shows, and SlideLogic's own format: saved back as they are. */
 const PRESENTATIONS = ['pptx', 'potx', 'ppsx', 'deckcraft']
@@ -37,4 +40,19 @@ registerFileAction({
 	},
 	order: -10,
 	default: DefaultType.DEFAULT,
+})
+
+// "Open in SlideLogic desktop app": the presentation in SlideLogic on this computer
+// (`slidelogic://open`, desktop.js), signed in to this Nextcloud and co-editing with the browser.
+// Not on a link's page: a guest has no account for the desktop app to sign in with.
+registerFileAction({
+	id: 'deckcraft-open-desktop',
+	displayName: () => 'Open in SlideLogic desktop app',
+	iconSvgInline: () => ICON,
+	enabled: ({ nodes }) => nodes.length === 1 && opens(nodes[0]) && !isPublicShare(),
+	async exec({ nodes }) {
+		openInDesktop(nodes[0].path)
+		return null
+	},
+	order: -9,
 })
