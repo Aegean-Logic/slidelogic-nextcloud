@@ -7,14 +7,15 @@
 #   scripts/vendor-editor.sh <zip>      unpack deckcraft-web-<version>.zip (deckcraft/packaging/web/package.sh)
 #
 # DECKCRAFT defaults to ../deckcraft next to this repository. editor/README.md is kept.
+# (No variable here is called TMP: on Windows that would hide the temp folder from cargo.)
 set -euo pipefail
 
 APP="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEST="$APP/editor"
 DECKCRAFT="${DECKCRAFT:-$APP/../deckcraft}"
 SRC="${1:-}"
-TMP=""
-trap '[ -n "$TMP" ] && rm -rf "$TMP"' EXIT
+UNPACKED=""
+trap '[ -n "$UNPACKED" ] && rm -rf "$UNPACKED"' EXIT
 
 if [ -z "$SRC" ]; then
   command -v trunk >/dev/null || { echo "error: trunk not found (cargo install trunk --locked)" >&2; exit 1; }
@@ -22,9 +23,9 @@ if [ -z "$SRC" ]; then
   (cd "$DECKCRAFT/apps/deckcraft-web" && trunk build --release)
   SRC="$DECKCRAFT/dist/web"
 elif [ -f "$SRC" ]; then
-  TMP="$(mktemp -d)"
-  unzip -q "$SRC" -d "$TMP"
-  INDEX="$(find "$TMP" -name index.html -print -quit)"
+  UNPACKED="$(mktemp -d)"
+  unzip -q "$SRC" -d "$UNPACKED"
+  INDEX="$(find "$UNPACKED" -name index.html -print -quit)"
   [ -n "$INDEX" ] || { echo "error: no index.html in $1" >&2; exit 1; }
   SRC="$(dirname "$INDEX")"
 fi
