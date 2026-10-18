@@ -155,7 +155,9 @@ class CollabService {
 		])->executeStatement();
 		// The newest build in the session sets what everyone runs: members on an older one are
 		// sent to rejoin (their page reloads with the new build) before they misread an edit.
+		$sessionBuild = (string)($session['build'] ?? '');
 		if (version_compare(self::build($build), (string)($session['build'] ?? ''), '>')) {
+			$sessionBuild = self::build($build);
 			$qb = $this->db->getQueryBuilder();
 			$qb->update('deckcraft_sessions')
 				->set('build', $qb->createNamedParameter(self::build($build)))
@@ -171,6 +173,8 @@ class CollabService {
 			'entries' => $this->entries($id, $from, PHP_INT_MAX),
 			'members' => $this->activeMembers($id, $now),
 			'restarted' => $restarted,
+			// The newest build in the session: an older one joining is sent back at its first call.
+			'build' => $sessionBuild,
 		];
 	}
 
@@ -379,7 +383,7 @@ class CollabService {
 		}
 		$session = (string)($this->sessionById($sessionId)['build'] ?? '');
 		if (version_compare((string)($row['build'] ?? ''), $session, '<')) {
-			throw new NotMemberException();
+			throw new NotMemberException(true);
 		}
 	}
 
