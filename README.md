@@ -42,6 +42,10 @@ It is the presentation app beside [GridLogic for Nextcloud](../gridcraft-nextclo
   editor lists who's editing. Places travel with each poll and are kept in
   `deckcraft_members.selection`; the server doesn't read them.
 - **Undo:** Undo and Redo take back a person's own edits only, never someone else's later change.
+- **One build per session:** each page joins with the app version it runs. The server keeps the
+  newest per session (`deckcraft_sessions.build`, `deckcraft_members.build`) and answers any member
+  on an older one with `{rejoin: true}`, so a tab left open across an upgrade reloads with the new
+  SlideLogic before it misreads the others' edits or saves its copy over them.
 - **View-only access:** someone who can read but not write the file follows the others live; an
   edit they try is refused with a message (and the server refuses it too). Only members who can
   edit save the shared presentation, and the server records a checkpoint only from them, and only
@@ -102,10 +106,10 @@ The sequencer (`/apps/deckcraft/collab/*`, JSON, with Nextcloud's CSRF token or
 
 | Route | Does |
 |---|---|
-| `POST join {fileId, etag}` | `{sessionId, client, seq, hasState, entries, members, canEdit}`, or `{retry: true}` (load the file again) |
+| `POST join {fileId, etag, build}` | `{sessionId, client, seq, hasState, entries, members, canEdit}`, or `{retry: true}` (load the file again) |
 | `GET state ?sessionId&client&seq` | The state snapshot for `seq` (when `hasState`); 404 `{retry: true}` if a newer save replaced it |
 | `POST push {sessionId, client, clientSeq, base, op}` | `{seq}`; a retried push gets the same position; 403 for view-only members, 400 for an op over 64 MB |
-| `GET sync ?sessionId&client&since&sel` | `{entries, members, checkpointSeq, checkpointEtag}`, or `{rejoin: true}` |
+| `GET sync ?sessionId&client&since&sel` | `{entries, members, checkpointSeq, checkpointEtag}`, or `{rejoin: true}` (also to a member on an older build than the session's) |
 | `POST checkpoint {sessionId, client, seq, etag, state}` | Records the save (only for the ETag the file has) and keeps its snapshot |
 | `POST leave {sessionId, client}` | |
 

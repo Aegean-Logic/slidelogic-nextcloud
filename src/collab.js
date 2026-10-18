@@ -34,9 +34,11 @@ export class Collab {
 	 * @param {string} o.endpoint the sequencer's URL (`…/collab`)
 	 * @param {string} o.person how the others see this person
 	 * @param {object} o.joinParams more for joining (a link visitor's name, the path in a shared folder)
+	 * @param {string} o.build this page's app version: the server sends members of an older one back to
+	 *   reload, so everyone in a session runs the same SlideLogic
 	 */
-	constructor({ frame, fileId, fileUrl, headers, notify, onMembers, onChange, endpoint, person, joinParams = {} }) {
-		Object.assign(this, { frame, fileId, fileUrl, headers, notify, onMembers, onChange, endpoint, person, joinParams })
+	constructor({ frame, fileId, fileUrl, headers, notify, onMembers, onChange, endpoint, person, joinParams = {}, build = '' }) {
+		Object.assign(this, { frame, fileId, fileUrl, headers, notify, onMembers, onChange, endpoint, person, joinParams, build })
 		/** A link visitor's proof of membership, from joining (sent with every call). */
 		this.key = ''
 		this.sessionId = 0
@@ -74,7 +76,7 @@ export class Collab {
 			}
 			const etag = bare(response.headers.get('ETag') ?? '')
 			const bytes = await response.arrayBuffer()
-			const joined = await this.call('POST', 'join', { fileId: this.fileId, etag, ...this.joinParams })
+			const joined = await this.call('POST', 'join', { fileId: this.fileId, etag, build: this.build, ...this.joinParams })
 			if (joined.retry) {
 				// Saved for the session since this copy was fetched: fetch it again, giving a
 				// save in progress time to finish.

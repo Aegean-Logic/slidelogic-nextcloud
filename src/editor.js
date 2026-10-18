@@ -403,6 +403,7 @@ async function share(frame) {
 		notify: note,
 		endpoint: viaLink ? generateUrl(`/apps/deckcraft/s/${encodeURIComponent(token)}/collab`) : generateUrl('/apps/deckcraft/collab'),
 		joinParams: viaLink ? { displayName: personName, path: sharePath } : {},
+		build: new URL(root.dataset.editorUrl, location.href).searchParams.get('v') ?? '',
 		person: personName,
 		onMembers(members) {
 			others = Math.max(0, members.length - 1)
