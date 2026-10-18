@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace OCA\DeckCraft\AppInfo;
 
 use OCA\Files\Event\LoadAdditionalScriptsEvent;
+use OCA\Files_Sharing\Event\BeforeTemplateRenderedEvent;
 use OCA\DeckCraft\Listener\LoadFilesScripts;
+use OCA\DeckCraft\Listener\LoadPublicFolderScripts;
+use OCA\DeckCraft\Share\EditorPageProvider;
 use OCP\App\IAppManager;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
@@ -22,6 +25,10 @@ class Application extends App implements IBootstrap {
 	public function register(IRegistrationContext $context): void {
 		// The Files app loads our "Open in SlideLogic" action.
 		$context->registerEventListener(LoadAdditionalScriptsEvent::class, LoadFilesScripts::class);
+		// A shared link to a presentation opens in SlideLogic.
+		$context->registerPublicShareTemplateProvider(EditorPageProvider::class);
+		// A link to a folder: its presentations open in SlideLogic too.
+		$context->registerEventListener(BeforeTemplateRenderedEvent::class, LoadPublicFolderScripts::class);
 	}
 
 	public function boot(IBootContext $context): void {

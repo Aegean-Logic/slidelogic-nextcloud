@@ -1,7 +1,9 @@
-// Files app: an "Open in SlideLogic" action on presentations, the default (click to open) for them.
+// Files app: an "Open in SlideLogic" action on presentations, the default (click to open) for them,
+// in the user's files and on the page of a link to a folder.
 
 import { DefaultType, Permission, registerFileAction } from '@nextcloud/files'
 import { generateUrl } from '@nextcloud/router'
+import { getSharingToken, isPublicShare } from '@nextcloud/sharing/public'
 
 /** PowerPoint presentations, templates and shows, and SlideLogic's own format: saved back as they are. */
 const PRESENTATIONS = ['pptx', 'potx', 'ppsx', 'deckcraft']
@@ -26,7 +28,9 @@ registerFileAction({
 	iconSvgInline: () => ICON,
 	enabled: ({ nodes }) => nodes.length === 1 && opens(nodes[0]),
 	async exec({ nodes }) {
-		const url = new URL(generateUrl('/apps/deckcraft/edit'), location.href)
+		// On a link to a folder, through the link: the path is within the shared folder.
+		const token = isPublicShare() ? getSharingToken() : null
+		const url = new URL(generateUrl(token ? `/apps/deckcraft/s/${encodeURIComponent(token)}/edit` : '/apps/deckcraft/edit'), location.href)
 		url.searchParams.set('path', nodes[0].path)
 		window.location.assign(url.toString())
 		return null

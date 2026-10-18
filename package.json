@@ -1,16 +1,17 @@
 {
   "name": "deckcraft-nextcloud",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
     "build": "esbuild src/files.js src/editor.js --bundle --format=esm --target=es2022 --outdir=js --entry-names=deckcraft-[name] --out-extension:.js=.mjs"
   },
   "dependencies": {
+    "@nextcloud/auth": "^2.5.1",
     "@nextcloud/files": "4.1.0",
     "@nextcloud/router": "^3.0.1",
-    "@nextcloud/auth": "^2.5.1"
+    "@nextcloud/sharing": "^0.4.0"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"

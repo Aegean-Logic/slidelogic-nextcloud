@@ -5,9 +5,13 @@
 //
 // A presentation in a format SlideLogic saves in place is co-edited: everyone with it open edits
 // the same presentation (collab.js), and Save writes it as everyone has it.
+//
+// The same page serves shared links (`/s/{token}`, `data-share-token`): the file is then the
+// link's own WebDAV address (a link to a folder: the presentation's address in it,
+// `data-share-path`), and the person is a guest under the name they gave Nextcloud.
 
-import { getCurrentUser, getRequestToken } from '@nextcloud/auth'
-import { generateRemoteUrl, generateUrl } from '@nextcloud/router'
+import { getCurrentUser, getGuestNickname, getRequestToken } from '@nextcloud/auth'
+import { generateRemoteUrl, generateUrl, getRootUrl } from '@nextcloud/router'
 
 import { Collab, colorFor } from './collab.js'
 
@@ -16,9 +20,16 @@ const status = document.getElementById('deckcraft-status')
 const notice = document.getElementById('deckcraft-notice')
 const path = root?.dataset.path ?? ''
 const fileId = Number(root?.dataset.fileId ?? 0)
+/** A shared link's token: the page is the link's. */
+const token = root?.dataset.shareToken ?? ''
+const viaLink = token !== ''
+/** Through a link to a folder: the presentation's path in it (`/Talks/Talk.pptx`). */
+const sharePath = root?.dataset.sharePath ?? ''
+/** Whether the link lets people edit (signed-in users: Nextcloud decides on each save). */
+const linkCanEdit = root?.dataset.canEdit === '1'
 const user = getCurrentUser()
 /** How the others see this person. */
-const personName = user?.displayName || user?.uid || 'Someone'
+const personName = user?.displayName || user?.uid || getGuestNickname() || 'Guest'
 
 /** The folder of `path` and its file name. */
 function split(p) {
@@ -26,7 +37,7 @@ function split(p) {
 	return i < 0 ? ['', p] : [p.slice(0, i), p.slice(i + 1)]
 }
 
-const [folder, fileName] = split(path)
+const [folder, fileName] = viaLink ? ['', root?.dataset.fileName ?? ''] : split(path)
 
 /** Formats SlideLogic saves a presentation in as it is (anything else is saved as .pptx). */
 const SAVES_IN_PLACE = ['pptx', 'potx', 'ppsx', 'deckcraft']
@@ -45,8 +56,12 @@ function isOpenedFile(name) {
 	return String(name ?? '').split(/[\\/]/).pop().toLowerCase() === fileName.toLowerCase()
 }
 
-/** WebDAV URL of a path in the user's files. */
+/** WebDAV URL of a path in the user's files; through a link, the shared presentation's. */
 function davUrl(p) {
+	if (viaLink) {
+		const inFolder = sharePath.split('/').filter(Boolean).map(encodeURIComponent).join('/')
+		return `${getRootUrl()}/public.php/dav/files/${encodeURIComponent(token)}${inFolder ? `/${inFolder}` : ''}`
+	}
 	const encoded = p.split('/').filter(Boolean).map(encodeURIComponent).join('/')
 	return `${generateRemoteUrl(`dav/files/${encodeURIComponent(user.uid)}`)}/${encoded}`
 }
@@ -87,7 +102,8 @@ function showTitle() {
 }
 
 function headers(extra = {}) {
-	return { requesttoken: getRequestToken() ?? '', ...extra }
+	// X-Requested-With: a link's WebDAV answers a missing password with 401, not a login prompt.
+	return { requesttoken: getRequestToken() ?? '', 'X-Requested-With': 'XMLHttpRequest', ...extra }
 }
 
 async function load(frame) {
@@ -97,7 +113,7 @@ async function load(frame) {
 	}
 	const etag = response.headers.get('ETag')
 	if (etag) {
-		etags.set(path, etag)
+		etags.set(inFolder(fileName), etag)
 	}
 	// An empty file (one just made in Files) opens as a new blank presentation saved under its name.
 	const bytes = await response.arrayBuffer()
@@ -145,6 +161,12 @@ async function storePresentation(message) {
 	if (!name) {
 		return { type: 'deckcraft:saveFailed', id: message.id, error: 'The presentation has no name.' }
 	}
+	if (viaLink && !linkCanEdit) {
+		return { type: 'deckcraft:saveFailed', id: message.id, error: 'This link lets you view the presentation, not change it. Download a copy to keep your changes.' }
+	}
+	if (viaLink && name !== fileName) {
+		return { type: 'deckcraft:saveFailed', id: message.id, error: `This link can only save ${fileName}. Download a copy to keep it under another name.` }
+	}
 	const known = etags.has(inFolder(name))
 	const response = await put(inFolder(name), message.bytes)
 	if (response.status === 412) {
@@ -178,6 +200,12 @@ async function storeCopy(message) {
 		note("Couldn't save the copy: it has no name.", true)
 		return
 	}
+	if (viaLink) {
+		// A link reaches only the shared presentation: the copy is downloaded instead.
+		download(name, message.bytes)
+		note(`Downloaded ${name}.`)
+		return
+	}
 	for (let n = 1; n <= 50; n++) {
 		const candidate = n === 1 ? name : numbered(name, n)
 		if (etags.has(inFolder(candidate))) {
@@ -196,15 +224,25 @@ async function storeCopy(message) {
 	note(`Couldn't save ${name}: too many files with that name in this folder.`, true)
 }
 
+/** Has the browser save `bytes` as `name`. */
+function download(name, bytes) {
+	const url = URL.createObjectURL(new Blob([bytes]))
+	const a = Object.assign(document.createElement('a'), { href: url, download: name, hidden: true })
+	document.body.append(a)
+	a.click()
+	a.remove()
+	setTimeout(() => URL.revokeObjectURL(url), 10_000)
+}
+
 function start() {
 	if (!root || !status || !notice) {
 		return
 	}
-	if (!user) {
+	if (!user && !viaLink) {
 		show('Sign in to Nextcloud to open files in SlideLogic.', true)
 		return
 	}
-	if (!path) {
+	if (!path && !viaLink) {
 		show('No file to open. Open a presentation from Files with "Open in SlideLogic".', true)
 		return
 	}
@@ -214,7 +252,7 @@ function start() {
 	}
 	const editorUrl = new URL(root.dataset.editorUrl, location.href)
 	// Added to the page's own query (`v`, the app version), which keeps browser caches current.
-	for (const [key, value] of Object.entries({ host: 'parent', ack: '1', author: user.displayName ?? user.uid })) {
+	for (const [key, value] of Object.entries({ host: 'parent', ack: '1', author: personName })) {
 		editorUrl.searchParams.set(key, value)
 	}
 
@@ -263,7 +301,9 @@ function start() {
 				let reply
 				try {
 					// Shared: Save writes the presentation as everyone has it.
-					if (collab && isOpenedFile(message.name)) {
+					if (collab && isOpenedFile(message.name) && !collab.canEdit) {
+						reply = { type: 'deckcraft:saveFailed', id: message.id, error: 'You can view this presentation but not change it. Download a copy to keep it.' }
+					} else if (collab && isOpenedFile(message.name)) {
 						await collab.checkpoint()
 						reply = { type: 'deckcraft:saved', id: message.id }
 						showTitle()
@@ -361,7 +401,8 @@ async function share(frame) {
 		fileUrl: davUrl(path),
 		headers,
 		notify: note,
-		endpoint: generateUrl('/apps/deckcraft/collab'),
+		endpoint: viaLink ? generateUrl(`/apps/deckcraft/s/${encodeURIComponent(token)}/collab`) : generateUrl('/apps/deckcraft/collab'),
+		joinParams: viaLink ? { displayName: personName, path: sharePath } : {},
 		person: personName,
 		onMembers(members) {
 			others = Math.max(0, members.length - 1)
@@ -373,7 +414,7 @@ async function share(frame) {
 	const { bytes, seq, state, entries } = await collab.join()
 	const etag = collab.checkpointEtag
 	if (etag) {
-		etags.set(path, `"${etag}"`)
+		etags.set(inFolder(fileName), `"${etag}"`)
 	}
 	// The file names the presentation and its format; a state snapshot, when the session keeps
 	// one, is the shared presentation itself (collab:start).
