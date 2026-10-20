@@ -261,6 +261,11 @@ function start() {
 		// The presentation can carry on in SlideLogic on this computer (Open in Desktop App).
 		params.desktop = '1'
 	}
+	// A mention's link names its comment: SlideLogic opens it once the presentation is in.
+	const comment = new URLSearchParams(location.search).get('comment')
+	if (comment) {
+		params.comment = comment.slice(0, 300)
+	}
 	for (const [key, value] of Object.entries(params)) {
 		editorUrl.searchParams.set(key, value)
 	}
@@ -351,7 +356,7 @@ function start() {
 			shareHandler ??= viaLink
 				// (In a shared folder, the editor's own address, which names the presentation in it.)
 				? guestSharing({ name: shownName, link: sharePath ? location.href : `${location.origin}${location.pathname}` })
-				: sharing({ path, name: shownName, davUrl: davUrl(path) })
+				: sharing({ path, name: shownName, davUrl: davUrl(path), fileId })
 			const reply = await shareHandler(message)
 			frame.contentWindow.postMessage(reply, location.origin)
 			break

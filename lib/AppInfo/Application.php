@@ -8,6 +8,7 @@ use OCA\Files\Event\LoadAdditionalScriptsEvent;
 use OCA\Files_Sharing\Event\BeforeTemplateRenderedEvent;
 use OCA\DeckCraft\Listener\LoadFilesScripts;
 use OCA\DeckCraft\Listener\LoadPublicFolderScripts;
+use OCA\DeckCraft\Notification\Notifier;
 use OCA\DeckCraft\Share\EditorPageProvider;
 use OCP\App\IAppManager;
 use OCP\AppFramework\App;
@@ -29,6 +30,8 @@ class Application extends App implements IBootstrap {
 		$context->registerPublicShareTemplateProvider(EditorPageProvider::class);
 		// A link to a folder: its presentations open in SlideLogic too.
 		$context->registerEventListener(BeforeTemplateRenderedEvent::class, LoadPublicFolderScripts::class);
+		// @mentions in comments.
+		$context->registerNotifierService(Notifier::class);
 	}
 
 	public function boot(IBootContext $context): void {
